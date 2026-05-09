@@ -21,11 +21,10 @@ import (
 func main() {
 	log.Println("Starting EDI Processing API Server")
 
-	// Load configuration
 	cfg := config.Load()
 	log.Printf("Configuration loaded - Port: %s, MongoDB: %s\n", cfg.Server.Port, cfg.MongoDB.URI)
 
-	// Initialize MongoDB
+	// init mongo
 	db, err := storage.NewMongoDB(&cfg.MongoDB)
 	if err != nil {
 		log.Fatalf("Failed to initialize MongoDB: %v", err)
@@ -38,14 +37,13 @@ func main() {
 		}
 	}()
 
-	// Create indexes
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	if err := db.CreateIndexes(ctx); err != nil {
 		log.Printf("Warning: Failed to create MongoDB indexes: %v", err)
 	}
 	cancel()
 
-	// Initialize Redis queue
+	// init redis
 	redisQueue, err := queue.NewRedisQueue(&cfg.Redis)
 	if err != nil {
 		log.Fatalf("Failed to initialize Redis queue: %v", err)
@@ -56,11 +54,8 @@ func main() {
 		}
 	}()
 
-	// Setup router
 	router := api.SetupRouter(db, redisQueue)
 	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
-
-	// Configure HTTP server
 	server := &http.Server{
 		Addr:         fmt.Sprintf(":%s", cfg.Server.Port),
 		Handler:      router,
@@ -68,7 +63,6 @@ func main() {
 		WriteTimeout: cfg.Server.WriteTimeout,
 	}
 
-	// Start server
 	go func() {
 		log.Printf("Server started on port %s\n", cfg.Server.Port)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -76,14 +70,12 @@ func main() {
 		}
 	}()
 
-	// Wait for interrupt signal
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
 	log.Println("Shutting down server...")
 
-	// Graceful shutdown
 	ctx, cancel = context.WithTimeout(context.Background(), cfg.Server.ShutdownTimeout)
 	defer cancel()
 

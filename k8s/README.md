@@ -1,38 +1,27 @@
-# Kubernetes Deployment
+# K8s Setup for EDI Processing
 
-This directory contains basic Kubernetes manifests for deploying the EDI Processing System.
+So I threw together some basic k8s manifests to get this thing running in a cluster. Nothing fancy, just the basics to get MongoDB, Redis, the API, and workers all talking to each other.
 
-## Prerequisites
+## Getting it running
 
-- Kubernetes cluster (Minikube, Kind, Docker Desktop, or any other)
-- kubectl installed and configured
-- Docker installed
-
-## Quick Start
-
-### Deploy Everything
+Just run the deploy script and you're good to go:
 
 ```bash
 ./k8s/deploy.sh
 ```
 
-This script will:
-1. Build Docker images for API and Worker
-2. Load images into your cluster (if using Minikube or Kind)
-3. Create namespace and all resources
-4. Wait for everything to be ready
+It'll build the Docker images, load them into your cluster (works with Minikube and Kind), create the namespace, and spin everything up. Give it a minute to get all the pods running.
 
-### Access the API
+Once it's up, you can access the API like this:
 
 ```bash
-# Port-forward to access the API
 kubectl port-forward -n edi svc/edi-api 8080:8080
 
-# In another terminal, test it
+# then in another terminal
 curl http://localhost:8080/health
 ```
 
-### View Logs
+## Checking logs and stuff
 
 ```bash
 # API logs
@@ -41,43 +30,53 @@ kubectl logs -n edi -l app=edi-api -f
 # Worker logs
 kubectl logs -n edi -l app=edi-worker -f
 
-# All logs
+# or just watch everything
 kubectl logs -n edi --all-containers -f
+
+# see what's running
+kubectl get pods -n edi
+kubectl get all -n edi
 ```
 
-### Check Status
+## Testing it out
 
 ```bash
-# View all pods
-kubectl get pods -n edi
+# forward the port first
+kubectl port-forward -n edi svc/edi-api 8080:8080 &
 
-# View all resources
-kubectl get all -n edi
+# health check
+curl http://localhost:8080/health
 
-# Describe a specific pod
-kubectl describe pod <pod-name> -n edi
+# upload a file
+curl -X POST http://localhost:8080/jobs -F "file=@sample.edi"
+
+# check job status (use the ID from above)
+curl http://localhost:8080/jobs/<JOB_ID>
+
+# get results
+curl http://localhost:8080/jobs/<JOB_ID>/result
 ```
 
-### Cleanup
+## Cleaning up
+
+When you're done:
 
 ```bash
 ./k8s/cleanup.sh
 ```
 
-## Manual Deployment
-
-If you prefer to deploy manually:
+## If you want to do it manually
 
 ```bash
-# 1. Build images
+# build images
 docker build -t edi-api:latest -f Dockerfile .
 docker build -t edi-worker:latest -f Dockerfile.worker .
 
-# 2. Load images (if using Minikube)
+# load into minikube (if that's what you're using)
 minikube image load edi-api:latest
 minikube image load edi-worker:latest
 
-# 3. Apply manifests in order
+# apply everything
 kubectl apply -f k8s/namespace.yaml
 kubectl apply -f k8s/configmap.yaml
 kubectl apply -f k8s/storage.yaml
@@ -87,125 +86,44 @@ kubectl apply -f k8s/api.yaml
 kubectl apply -f k8s/worker.yaml
 ```
 
-## Kubernetes Resources
+## What's running
 
-### Namespace
-- `edi` - Isolated namespace for all resources
-
-### Storage
-- `mongodb-pvc` - 5Gi persistent volume for MongoDB
-- `redis-pvc` - 1Gi persistent volume for Redis
-
-### Databases
-- `mongodb` - MongoDB deployment (1 replica) and service
-- `redis` - Redis deployment (1 replica) and service
-
-### Applications
-- `edi-api` - API server deployment (2 replicas) and service
-- `edi-worker` - Worker deployment (2 replicas) and service
-
-### Configuration
-- `edi-config` - ConfigMap with environment variables
-
-## Resource Limits
-
-Each component has resource requests and limits:
-
-**API & Worker:**
-- Requests: 128Mi memory, 100m CPU
-- Limits: 256Mi memory, 200m CPU
-
-**MongoDB:**
-- Requests: 256Mi memory, 250m CPU
-- Limits: 512Mi memory, 500m CPU
-
-**Redis:**
-- Requests: 128Mi memory, 100m CPU
-- Limits: 256Mi memory, 200m CPU
-
-## Testing the Deployment
-
-```bash
-# 1. Port-forward the API
-kubectl port-forward -n edi svc/edi-api 8080:8080 &
-
-# 2. Test health endpoint
-curl http://localhost:8080/health
-
-# 3. Upload a sample EDI file
-curl -X POST http://localhost:8080/jobs -F "file=@sample.edi"
-
-# 4. Check job status (replace JOB_ID)
-curl http://localhost:8080/jobs/<JOB_ID>
-
-# 5. Get results
-curl http://localhost:8080/jobs/<JOB_ID>/result
-```
+Everything's in the `edi` namespace. There's persistent volumes for MongoDB (5Gi) and Redis (1Gi), then 2 replicas of the API and 2 workers. Resource limits are set to keep things from going crazy - APIs and workers get 128-256Mi mem and 100-200m CPU, MongoDB gets a bit more at 256-512Mi mem and 250-500m CPU.
 
 ## Scaling
 
-Scale the API or Worker:
+Need more capacity? Just scale it:
 
 ```bash
-# Scale API to 3 replicas
 kubectl scale deployment edi-api -n edi --replicas=3
-
-# Scale Worker to 5 replicas
 kubectl scale deployment edi-worker -n edi --replicas=5
-
-# Check status
 kubectl get pods -n edi
 ```
 
-## Troubleshooting
+## When things break
 
-### Pods not starting
+If pods aren't starting, check what's up:
 
 ```bash
-# Check pod status
 kubectl get pods -n edi
-
-# Describe problematic pod
 kubectl describe pod <pod-name> -n edi
-
-# Check logs
 kubectl logs <pod-name> -n edi
 ```
 
-### Image pull errors
+Getting `ImagePullBackOff`? Make sure you actually built the images (`docker images | grep edi`) and loaded them into your cluster. For Minikube use `minikube image load`, for Kind use `kind load docker-image`.
 
-If you see `ImagePullBackOff`:
-- Make sure images are built: `docker images | grep edi`
-- For Minikube: Run `minikube image load edi-api:latest edi-worker:latest`
-- For Kind: Run `kind load docker-image edi-api:latest edi-worker:latest`
+PVC stuck in pending? Check your storage class with `kubectl get storageclass`. Should work fine on Minikube/Kind out of the box.
 
-### PVC not binding
+Services not connecting? Test it:
 
 ```bash
-# Check PVC status
-kubectl get pvc -n edi
-
-# If pending, check storage class
-kubectl get storageclass
-```
-
-For Minikube/Kind, storage should work automatically. For other clusters, you may need to configure a storage class.
-
-### Connection refused errors
-
-Make sure services can reach each other:
-
-```bash
-# Test from API pod to MongoDB
 kubectl exec -n edi deployment/edi-api -- nc -zv mongodb 27017
-
-# Test from API pod to Redis
 kubectl exec -n edi deployment/edi-api -- nc -zv redis 6379
 ```
 
-## Configuration
+## Changing config
 
-To modify configuration, edit `k8s/configmap.yaml` and reapply:
+Edit `k8s/configmap.yaml` then:
 
 ```bash
 kubectl apply -f k8s/configmap.yaml
@@ -213,31 +131,33 @@ kubectl rollout restart deployment/edi-api -n edi
 kubectl rollout restart deployment/edi-worker -n edi
 ```
 
-## Production Considerations
+## Production notes
 
-This is a basic setup suitable for learning and development. For production:
+Look, this is just a dev setup. If you're actually taking this to prod you'll want to:
+- Push images to a proper registry (ECR, GCR, whatever)
+- Add an Ingress controller for real traffic
+- Move secrets out of the configmap into actual Secrets
+- Set up proper storage with backups
+- Add monitoring (Prometheus/Grafana)
+- Set up HPA for autoscaling
+- Network policies and RBAC
+- Make MongoDB and Redis properly HA with StatefulSets
 
-1. **Use a registry** - Push images to a container registry instead of local images
-2. **Add Ingress** - Set up proper ingress for external access
-3. **Add Secrets** - Move sensitive data to Kubernetes Secrets
-4. **Add persistence** - Use proper storage classes with backups
-5. **Add monitoring** - Set up Prometheus and Grafana
-6. **Add autoscaling** - Configure HPA (Horizontal Pod Autoscaler)
-7. **Add security** - Network policies, pod security policies, RBAC
-8. **Multi-replica databases** - Use StatefulSets for MongoDB and Redis
+But for local dev and testing? This works fine.
 
-## File Structure
+## Files
 
 ```
 k8s/
-├── namespace.yaml      # Namespace definition
-├── configmap.yaml      # Configuration
-├── storage.yaml        # PersistentVolumeClaims
-├── mongodb.yaml        # MongoDB deployment & service
-├── redis.yaml          # Redis deployment & service
-├── api.yaml            # API deployment & service
-├── worker.yaml         # Worker deployment & service
-├── deploy.sh           # Deployment script
-├── cleanup.sh          # Cleanup script
-└── README.md           # This file
+├── namespace.yaml      # the namespace
+├── configmap.yaml      # env vars and config
+├── storage.yaml        # PVCs for mongo and redis
+├── mongodb.yaml        # mongo deployment
+├── redis.yaml          # redis deployment
+├── api.yaml            # API server
+├── worker.yaml         # background workers
+├── deploy.sh           # one-click deploy
+└── cleanup.sh          # tear it all down
 ```
+
+Need to setup kubectl and docker first obviously. Works with Minikube, Kind, Docker Desktop k8s, or any cluster really.

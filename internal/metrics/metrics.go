@@ -5,7 +5,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
-// Simple metrics for basic monitoring
 var (
 	JobsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{

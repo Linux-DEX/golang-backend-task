@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -17,6 +18,21 @@ const (
 	jobsCollection    = "jobs"
 	resultsCollection = "results"
 )
+
+var (
+	ErrJobNotFound = errors.New("job not found")
+)
+
+type StorageInterface interface {
+	GetJob(ctx context.Context, jobID string) (*models.Job, error)
+	SaveJob(ctx context.Context, job *models.Job) error
+	UpdateJob(ctx context.Context, job *models.Job) error
+	UpdateJobStatus(ctx context.Context, jobID string, status models.JobStatus) error
+	UpdateJobWithResult(ctx context.Context, jobID string, status models.JobStatus, result *models.Result, errorMsg string) error
+	IncrementRetryCount(ctx context.Context, jobID string) error
+	CreateIndexes(ctx context.Context) error
+	Close(ctx context.Context) error
+}
 
 type Storage struct {
 	client *mongo.Client

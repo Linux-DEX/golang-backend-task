@@ -21,10 +21,8 @@ func main() {
 	log.Println("Starting EDI Worker Service")
 
 	cfg := config.Load()
-	log.Printf("Configuration loaded - MongoDB: %s, Redis: %s:%s\n",
+	log.Printf("Configuration loaded - MongoDB: %s, Redis: %s:%d\n",
 		cfg.MongoDB.URI, cfg.Redis.Host, cfg.Redis.Port)
-
-	// Initialize storage
 	store, err := storage.New(cfg)
 	if err != nil {
 		log.Fatalf("Failed to initialize storage: %v", err)
@@ -36,8 +34,6 @@ func main() {
 			log.Printf("Error closing storage: %v", err)
 		}
 	}()
-
-	// Initialize queue
 	q, err := queue.New(cfg)
 	if err != nil {
 		log.Fatalf("Failed to initialize queue: %v", err)
@@ -47,11 +43,7 @@ func main() {
 			log.Printf("Error closing queue: %v", err)
 		}
 	}()
-
-	// Initialize processor
 	processor := worker.NewProcessor(store, cfg.Worker.MaxRetries)
-
-	// Start metrics endpoint
 	go func() {
 		http.Handle("/metrics", promhttp.Handler())
 		log.Println("Metrics server started on :9091")
@@ -59,15 +51,11 @@ func main() {
 			log.Printf("Metrics server error: %v", err)
 		}
 	}()
-
-	// Setup graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-
-	// Start worker loop
 	go workerLoop(ctx, q, processor, cfg)
 
 	// Wait for shutdown signal
@@ -75,7 +63,6 @@ func main() {
 	log.Println("Shutdown signal received, stopping worker...")
 	cancel()
 
-	// Give some time for graceful shutdown
 	time.Sleep(5 * time.Second)
 	log.Println("Worker service stopped")
 }
@@ -90,7 +77,6 @@ func workerLoop(ctx context.Context, q *queue.Queue, processor *worker.Processor
 			log.Println("Worker loop stopped")
 			return
 		default:
-			// Dequeue job
 			jobData, err := q.Dequeue(ctx)
 			if err != nil {
 				log.Printf("Error dequeuing job: %v", err)
@@ -102,11 +88,8 @@ func workerLoop(ctx context.Context, q *queue.Queue, processor *worker.Processor
 				time.Sleep(pollInterval)
 				continue
 			}
-
-			// Parse job message
 			var jobMsg queue.JobMessage
 			if err := json.Unmarshal([]byte(jobData), &jobMsg); err != nil {
-				// Fallback to legacy format (just job ID)
 				processJob(ctx, processor, jobData, "")
 			} else {
 				processJob(ctx, processor, jobMsg.JobID, jobMsg.FileContent)

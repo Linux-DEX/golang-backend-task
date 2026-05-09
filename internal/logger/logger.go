@@ -5,7 +5,6 @@ import (
 	"os"
 )
 
-// Simple logger wrapper for backward compatibility
 type Logger struct {
 	logger *log.Logger
 }
