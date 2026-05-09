@@ -6,10 +6,10 @@
 *.dylib
 *.test
 *.out
-api
-edi-api
-edi-worker
-worker
+/api
+/edi-api
+/edi-worker
+/worker
 
 # Go workspace file
 go.work
