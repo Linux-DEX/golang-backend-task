@@ -81,11 +81,13 @@ make run-worker
 ## API usage
 
 **Health check:**
+
 ```/dev/null/bash.sh#L1-2
 GET /health
 ```
 
 **Upload a file:**
+
 ```/dev/null/bash.sh#L1-3
 curl -X POST http://localhost:8080/jobs \
   -F "file=@sample.edi"
@@ -94,6 +96,7 @@ curl -X POST http://localhost:8080/jobs \
 Returns a job_id you can use to check status.
 
 **Check job status:**
+
 ```/dev/null/bash.sh#L1-2
 curl http://localhost:8080/jobs/{job_id}
 ```
@@ -101,6 +104,7 @@ curl http://localhost:8080/jobs/{job_id}
 Status will be one of: `pending`, `processing`, `completed`, `failed`
 
 **Get the results:**
+
 ```/dev/null/bash.sh#L1-2
 curl http://localhost:8080/jobs/{job_id}/result
 ```
@@ -167,17 +171,20 @@ Pretty straightforward.
 ## Development stuff
 
 Build:
+
 ```/dev/null/bash.sh#L1-3
 make build          # API server
 make build-worker   # Worker
 ```
 
 Tests:
+
 ```/dev/null/bash.sh#L1-2
 make test
 ```
 
 View logs:
+
 ```/dev/null/bash.sh#L1-5
 docker-compose logs -f
 
@@ -187,6 +194,7 @@ docker-compose logs -f worker
 ```
 
 Stop everything:
+
 ```/dev/null/bash.sh#L1-4
 docker-compose down
 
@@ -197,6 +205,7 @@ docker-compose down -v
 ## Monitoring
 
 Metrics are exposed at:
+
 - API: http://localhost:8080/metrics
 - Worker: http://localhost:9091/metrics
 
@@ -209,11 +218,3 @@ Main metric is `edi_jobs_total` which tracks jobs by status. Also includes stand
 **Worker not processing** - verify Redis is running (`docker exec -it edi-redis redis-cli PING`), check MongoDB is up, check the queue has jobs (`docker exec -it edi-redis redis-cli LLEN edi:jobs:queue`). Check worker logs.
 
 **Jobs stuck** - restart the worker (`docker-compose restart worker`), check logs for parsing errors
-
-## TODO
-
-- Auth/authorization
-- Rate limiting
-- Job cleanup/expiration
-- Webhooks for notifications
-- Horizontal scaling for workers

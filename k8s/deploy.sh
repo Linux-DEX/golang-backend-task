@@ -3,6 +3,29 @@
 set -e
 
 echo "Deploying to k8s..."
+
+# Check if kubectl can connect to a cluster
+if ! kubectl cluster-info &> /dev/null; then
+    echo "No Kubernetes cluster found. Setting up kind cluster..."
+    
+    # Check if kind is installed
+    if ! command -v kind &> /dev/null; then
+        echo "Installing kind..."
+        curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
+        chmod +x ./kind
+        sudo mv ./kind /usr/local/bin/kind
+    fi
+    
+    # Create kind cluster if it doesn't exist
+    if ! kind get clusters 2>/dev/null | grep -q "kind"; then
+        echo "Creating kind cluster..."
+        kind create cluster --name kind
+    fi
+    
+    echo "Waiting for cluster to be ready..."
+    kubectl wait --for=condition=Ready nodes --all --timeout=120s
+fi
+
 docker build -t edi-api:latest -f Dockerfile .
 docker build -t edi-worker:latest -f Dockerfile.worker .
 if command -v minikube &> /dev/null && minikube status &> /dev/null; then
@@ -41,3 +64,4 @@ echo "View logs:"
 echo "   kubectl logs -n edi -l app=edi-api -f"
 echo "   kubectl logs -n edi -l app=edi-worker -f"
 echo ""
+
