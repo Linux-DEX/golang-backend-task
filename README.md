@@ -210,11 +210,3 @@ Metrics are exposed at:
 - Worker: http://localhost:9091/metrics
 
 Main metric is `edi_jobs_total` which tracks jobs by status. Also includes standard Go runtime metrics.
-
-## Troubleshooting
-
-**API won't start** - check if port 8080 is free, make sure MongoDB and Redis are up. Look at logs with `docker-compose logs api`
-
-**Worker not processing** - verify Redis is running (`docker exec -it edi-redis redis-cli PING`), check MongoDB is up, check the queue has jobs (`docker exec -it edi-redis redis-cli LLEN edi:jobs:queue`). Check worker logs.
-
-**Jobs stuck** - restart the worker (`docker-compose restart worker`), check logs for parsing errors
